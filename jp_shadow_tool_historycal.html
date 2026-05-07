@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>日语跟读转写工具</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      max-width: 1000px;
+      margin: 40px auto;
+      padding: 0 20px;
+      line-height: 1.6;
+      background: #f7f7f7;
+      color: #222;
+    }
+
+    h1 {
+      font-size: 28px;
+      margin-bottom: 8px;
+    }
+
+    h2 {
+      font-size: 20px;
+      margin-top: 0;
+    }
+
+    .desc {
+      color: #555;
+      margin-bottom: 20px;
+    }
+
+    textarea {
+      width: 100%;
+      height: 260px;
+      font-size: 22px;
+      line-height: 1.6;
+      padding: 12px;
+      box-sizing: border-box;
+      border-radius: 10px;
+      border: 1px solid #ccc;
+      resize: vertical;
+      background: #fff;
+    }
+
+    button {
+      font-size: 16px;
+      padding: 9px 15px;
+      margin: 6px 6px 6px 0;
+      cursor: pointer;
+      border: none;
+      border-radius: 8px;
+      background: #222;
+      color: white;
+    }
+
+    button:hover {
+      opacity: 0.85;
+    }
+
+    button.secondary {
+      background: #666;
+    }
+
+    button.danger {
+      background: #b3261e;
+    }
+
+    button.small {
+      font-size: 13px;
+      padding: 5px 9px;
+      margin: 4px 4px 4px 0;
+    }
+
+    .row {
+      margin: 12px 0;
+    }
+
+    .panel {
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+
+    label {
+      margin-right: 8px;
+    }
+
+    select, input {
+      font-size: 16px;
+      padding: 6px;
+    }
+
+    .status {
+      font-size: 14px;
+      color: #555;
+      margin-top: 8px;
+    }
+
+    .status.on {
+      color: #0a7f2e;
+      font-weight: bold;
+    }
+
+    .status.off {
+      color: #777;
+    }
+
+    .hint {
+      font-size: 14px;
+      color: #666;
+      margin-top: 8px;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+    }
+
+    .history-list {
+      max-height: 360px;
+      overflow-y: auto;
+      border-top: 1px solid #eee;
+      margin-top: 12px;
+      padding-top: 8px;
+    }
+
+    .history-item {
+      border: 1px solid #ddd;
+      border-radius: 10px;
+      padding: 10px;
+      margin-bottom: 10px;
+      background: #fafafa;
+    }
+
+    .history-meta {
+      font-size: 13px;
+      color: #666;
+      margin-bottom: 6px;
+    }
+
+    .history-preview {
+      white-space: pre-wrap;
+      font-size: 15px;
+      color: #222;
+      max-height: 90px;
+      overflow: hidden;
+      background: white;
+      border-radius: 8px;
+      padding: 8px;
+      border: 1px solid #eee;
+    }
+
+    .history-actions {
+      margin-top: 8px;
+    }
+
+    .empty-history {
+      color: #777;
+      font-size: 14px;
+      padding: 10px 0;
+    }
+  </style>
+</head>
+<body>
+  <h1>日语跟读转写工具</h1>
+  <div class="desc">
+    手机播放日语音频，电脑实时听写。转写后可以直接朗读文本，并保存听写历史。
+  </div>
+
+  <div class="layout">
+    <div>
+      <div class="panel">
+        <div class="row">
+          <button onclick="startRecognition()">开始听写</button>
+          <button class="secondary" onclick="stopRecognition()">停止听写</button>
+          <button onclick="speakText()">朗读文本</button>
+          <button class="secondary" onclick="stopSpeaking()">停止朗读</button>
+          <button onclick="saveCurrentHistory()">保存历史</button>
+          <button class="danger" onclick="clearText()">清空</button>
+        </div>
+
+        <div id="status" class="status off">状态：未开始</div>
+        <div class="hint">
+          建议用 Chrome 或 Edge 打开。手机扬声器距离电脑麦克风约 10～20cm，音量 50%～70%。
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="row">
+          <label for="rate">语速：</label>
+          <input id="rate" type="range" min="0.5" max="1.5" step="0.1" value="0.9">
+          <span id="rateValue">0.9</span>
+        </div>
+
+        <div class="row">
+          <label for="pitch">音高：</label>
+          <input id="pitch" type="range" min="0.5" max="1.5" step="0.1" value="1.0">
+          <span id="pitchValue">1.0</span>
+        </div>
+
+        <div class="row">
+          <label for="voiceSelect">朗读声音：</label>
+          <select id="voiceSelect">
+            <option value="">自动选择日语声音</option>
+          </select>
+        </div>
+      </div>
+
+      <textarea id="text" placeholder="这里会显示日语转写结果，也可以手动修改后朗读。"></textarea>
+    </div>
+
+    <div class="panel">
+      <h2>听写历史</h2>
+
+      <div class="row">
+        <button class="secondary" onclick="renderHistory()">刷新历史</button>
+        <button class="danger" onclick="clearAllHistory()">清空全部历史</button>
+      </div>
+
+      <div class="hint">
+        历史保存在当前浏览器本地，不会上传。换浏览器、清除浏览器数据后会消失。
+      </div>
+
+      <div id="historyList" class="history-list"></div>
+    </div>
+  </div>
+
+  <script>
+    const textArea = document.getElementById("text");
+    const rate = document.getElementById("rate");
+    const pitch = document.getElementById("pitch");
+    const rateValue = document.getElementById("rateValue");
+    const pitchValue = document.getElementById("pitchValue");
+    const statusBox = document.getElementById("status");
+    const voiceSelect = document.getElementById("voiceSelect");
+    const historyList = document.getElementById("historyList");
+
+    const HISTORY_KEY = "jp_shadow_tool_history";
+    const LAST_TEXT_KEY = "jp_shadow_tool_last_text";
+    const MAX_HISTORY_COUNT = 50;
+
+    const SpeechRecognition =
+      window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    let recognition = null;
+    let finalText = "";
+    let isRecognizing = false;
+    let voices = [];
+
+    rate.oninput = () => {
+      rateValue.textContent = rate.value;
+    };
+
+    pitch.oninput = () => {
+      pitchValue.textContent = pitch.value;
+    };
+
+    textArea.addEventListener("input", () => {
+      finalText = textArea.value;
+      saveLastText();
+    });
+
+    function setStatus(text, isOn = false) {
+      statusBox.textContent = "状态：" + text;
+      statusBox.className = isOn ? "status on" : "status off";
+    }
+
+    function initRecognition() {
+      if (!SpeechRecognition) {
+        alert("当前浏览器不支持语音识别。请使用 Chrome 或 Edge。");
+        setStatus("浏览器不支持语音识别");
+        return;
+      }
+
+      recognition = new SpeechRecognition();
+      recognition.lang = "ja-JP";
+      recognition.continuous = true;
+      recognition.interimResults = true;
+
+      recognition.onstart = () => {
+        isRecognizing = true;
+        setStatus("正在听写", true);
+      };
+
+      recognition.onresult = (event) => {
+        let interimText = "";
+
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript;
+
+          if (event.results[i].isFinal) {
+            finalText += transcript + "\n";
+          } else {
+            interimText += transcript;
+          }
+        }
+
+        textArea.value = finalText + interimText;
+        saveLastText();
+      };
+
+      recognition.onerror = (event) => {
+        console.log("识别错误：", event.error);
+
+        if (event.error === "no-speech") {
+          setStatus("没有检测到声音");
+        } else if (event.error === "audio-capture") {
+          setStatus("没有检测到麦克风");
+        } else if (event.error === "not-allowed") {
+          setStatus("麦克风权限被拒绝");
+        } else {
+          setStatus("识别错误：" + event.error);
+        }
+
+        isRecognizing = false;
+      };
+
+      recognition.onend = () => {
+        isRecognizing = false;
+        setStatus("已停止");
+        autoSaveWhenStopped();
+      };
+    }
+
+    function startRecognition() {
+      if (!recognition) {
+        initRecognition();
+      }
+
+      if (!recognition) return;
+
+      if (isRecognizing) return;
+
+      speechSynthesis.cancel();
+
+      try {
+        recognition.start();
+      } catch (e) {
+        console.log("启动识别失败：", e);
+      }
+    }
+
+    function stopRecognition() {
+      if (recognition && isRecognizing) {
+        recognition.stop();
+      }
+
+      isRecognizing = false;
+      setStatus("已停止");
+      autoSaveWhenStopped();
+    }
+
+    function stopRecognitionBeforeSpeaking() {
+      if (recognition && isRecognizing) {
+        recognition.stop();
+        isRecognizing = false;
+        autoSaveWhenStopped();
+      }
+    }
+
+    function loadVoices() {
+      voices = speechSynthesis.getVoices();
+
+      voiceSelect.innerHTML = '<option value="">自动选择日语声音</option>';
+
+      voices.forEach((voice, index) => {
+        if (voice.lang && voice.lang.toLowerCase().startsWith("ja")) {
+          const option = document.createElement("option");
+          option.value = index;
+          option.textContent = `${voice.name} (${voice.lang})`;
+          voiceSelect.appendChild(option);
+        }
+      });
+    }
+
+    speechSynthesis.onvoiceschanged = loadVoices;
+    loadVoices();
+
+    function getSelectedJapaneseVoice() {
+      const selectedVoiceIndex = voiceSelect.value;
+
+      if (selectedVoiceIndex !== "") {
+        return voices[Number(selectedVoiceIndex)];
+      }
+
+      return voices.find(v =>
+        v.lang && v.lang.toLowerCase().startsWith("ja")
+      );
+    }
+
+    function speakGivenText(text, sourceLabel = "文本") {
+      const cleanText = text.trim();
+
+      if (!cleanText) {
+        setStatus("没有可朗读的内容");
+        return;
+      }
+
+      stopRecognitionBeforeSpeaking();
+
+      speechSynthesis.cancel();
+
+      const utterance = new SpeechSynthesisUtterance(cleanText);
+      utterance.lang = "ja-JP";
+      utterance.rate = Number(rate.value);
+      utterance.pitch = Number(pitch.value);
+
+      const japaneseVoice = getSelectedJapaneseVoice();
+
+      if (japaneseVoice) {
+        utterance.voice = japaneseVoice;
+      }
+
+      utterance.onstart = () => {
+        setStatus("正在朗读：" + sourceLabel, true);
+      };
+
+      utterance.onend = () => {
+        setStatus("朗读结束");
+      };
+
+      utterance.onerror = (event) => {
+        console.log("朗读错误：", event);
+        setStatus("朗读错误");
+      };
+
+      speechSynthesis.speak(utterance);
+    }
+
+    function speakText() {
+      const text = textArea.value.trim();
+
+      if (!text) {
+        setStatus("没有可朗读的文本");
+        return;
+      }
+
+      saveCurrentHistory(false);
+      speakGivenText(text, "文本框");
+    }
+
+    function speakHistoryItem(id) {
+      const history = getHistory();
+      const item = history.find(h => h.id === id);
+
+      if (!item) {
+        setStatus("没有找到这条历史");
+        return;
+      }
+
+      speakGivenText(item.text, "历史记录");
+    }
+
+    function stopSpeaking() {
+      speechSynthesis.cancel();
+      setStatus(isRecognizing ? "正在听写" : "已停止", isRecognizing);
+    }
+
+    function clearText() {
+      if (recognition && isRecognizing) {
+        recognition.stop();
+      }
+
+      speechSynthesis.cancel();
+
+      saveCurrentHistory(false);
+
+      finalText = "";
+      textArea.value = "";
+      isRecognizing = false;
+
+      localStorage.removeItem(LAST_TEXT_KEY);
+
+      setStatus("已清空");
+    }
+
+    function saveLastText() {
+      const text = textArea.value.trim();
+
+      if (text) {
+        localStorage.setItem(LAST_TEXT_KEY, text);
+      }
+    }
+
+    function restoreLastText() {
+      const lastText = localStorage.getItem(LAST_TEXT_KEY);
+
+      if (lastText) {
+        textArea.value = lastText;
+        finalText = lastText.endsWith("\n") ? lastText : lastText + "\n";
+        setStatus("已恢复上次内容");
+      }
+    }
+
+    function getHistory() {
+      try {
+        const raw = localStorage.getItem(HISTORY_KEY);
+        return raw ? JSON.parse(raw) : [];
+      } catch (e) {
+        console.log("读取历史失败：", e);
+        return [];
+      }
+    }
+
+    function setHistory(history) {
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+    }
+
+    function saveCurrentHistory(showMessage = true) {
+      const text = textArea.value.trim();
+
+      if (!text) {
+        if (showMessage) {
+          setStatus("没有可保存的内容");
+        }
+        return;
+      }
+
+      let history = getHistory();
+
+      const lastItem = history[0];
+
+      if (lastItem && lastItem.text.trim() === text) {
+        if (showMessage) {
+          setStatus("内容已存在于最新历史");
+        }
+        return;
+      }
+
+      const item = {
+        id: Date.now(),
+        text: text,
+        createdAt: new Date().toISOString()
+      };
+
+      history.unshift(item);
+
+      if (history.length > MAX_HISTORY_COUNT) {
+        history = history.slice(0, MAX_HISTORY_COUNT);
+      }
+
+      setHistory(history);
+      renderHistory();
+
+      if (showMessage) {
+        setStatus("已保存到历史");
+      }
+    }
+
+    function autoSaveWhenStopped() {
+      const text = textArea.value.trim();
+
+      if (!text) return;
+
+      const history = getHistory();
+      const lastItem = history[0];
+
+      if (lastItem && lastItem.text.trim() === text) {
+        return;
+      }
+
+      saveCurrentHistory(false);
+    }
+
+    function loadHistoryItem(id) {
+      const history = getHistory();
+      const item = history.find(h => h.id === id);
+
+      if (!item) return;
+
+      if (recognition && isRecognizing) {
+        recognition.stop();
+      }
+
+      speechSynthesis.cancel();
+
+      textArea.value = item.text;
+      finalText = item.text.endsWith("\n") ? item.text : item.text + "\n";
+
+      localStorage.setItem(LAST_TEXT_KEY, item.text);
+
+      setStatus("已载入历史");
+    }
+
+    function deleteHistoryItem(id) {
+      let history = getHistory();
+      history = history.filter(h => h.id !== id);
+      setHistory(history);
+      renderHistory();
+      setStatus("已删除一条历史");
+    }
+
+    function clearAllHistory() {
+      const ok = confirm("确定要清空全部听写历史吗？这个操作不能恢复。");
+
+      if (!ok) return;
+
+      localStorage.removeItem(HISTORY_KEY);
+      renderHistory();
+      setStatus("已清空全部历史");
+    }
+
+    function formatDate(isoString) {
+      const date = new Date(isoString);
+
+      const yyyy = date.getFullYear();
+      const mm = String(date.getMonth() + 1).padStart(2, "0");
+      const dd = String(date.getDate()).padStart(2, "0");
+      const hh = String(date.getHours()).padStart(2, "0");
+      const mi = String(date.getMinutes()).padStart(2, "0");
+
+      return `${yyyy}-${mm}-${dd} ${hh}:${mi}`;
+    }
+
+    function escapeHtml(str) {
+      return str
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function renderHistory() {
+      const history = getHistory();
+
+      if (!history.length) {
+        historyList.innerHTML = '<div class="empty-history">暂无听写历史</div>';
+        return;
+      }
+
+      historyList.innerHTML = history.map(item => {
+        const safeText = escapeHtml(item.text);
+        const preview = safeText.length > 300
+          ? safeText.slice(0, 300) + "..."
+          : safeText;
+
+        return `
+          <div class="history-item">
+            <div class="history-meta">
+              ${formatDate(item.createdAt)} ｜ ${item.text.length} 字符
+            </div>
+            <div class="history-preview">${preview}</div>
+            <div class="history-actions">
+              <button class="small" onclick="speakHistoryItem(${item.id})">朗读这条</button>
+              <button class="small" onclick="loadHistoryItem(${item.id})">恢复到文本框</button>
+              <button class="small danger" onclick="deleteHistoryItem(${item.id})">删除</button>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    window.addEventListener("beforeunload", () => {
+      saveLastText();
+
+      if (recognition && isRecognizing) {
+        recognition.stop();
+      }
+
+      speechSynthesis.cancel();
+    });
+
+    restoreLastText();
+    renderHistory();
+  </script>
+</body>
+</html>
